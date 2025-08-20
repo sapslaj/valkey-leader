@@ -1,0 +1,99 @@
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.headless.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    valkey-leader.sapslaj.cloud/service-type: headless
+spec:
+  clusterIP: None
+  selector:
+    {{- include "valkey-leader.selectorLabels" . | nindent 4 }}
+    {{- include "valkey-leader.clusterLabels" . | nindent 4 }}
+  ports:
+    - name: redis
+      port: {{ .Values.service.headless.port }}
+      targetPort: {{ .Values.valkey.port }}
+
+---
+# Read service - points to all pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.read.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    valkey-leader.sapslaj.cloud/service-type: read
+spec:
+  selector:
+    {{- include "valkey-leader.selectorLabels" . | nindent 4 }}
+    {{- include "valkey-leader.clusterLabels" . | nindent 4 }}
+  ports:
+    - name: redis
+      port: {{ .Values.service.read.port }}
+      targetPort: {{ .Values.valkey.port }}
+
+---
+# Read-only service - points to replica pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.readOnly.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    valkey-leader.sapslaj.cloud/service-type: read-only
+spec:
+  selector:
+    {{- include "valkey-leader.selectorLabels" . | nindent 4 }}
+    {{- include "valkey-leader.clusterLabels" . | nindent 4 }}
+    valkey.sapslaj.cloud/instance-role: replica
+  ports:
+    - name: redis
+      port: {{ .Values.service.readOnly.port }}
+      targetPort: {{ .Values.valkey.port }}
+
+---
+# Read-write service - points to primary pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.readWrite.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    valkey-leader.sapslaj.cloud/service-type: read-write
+spec:
+  selector:
+    {{- include "valkey-leader.selectorLabels" . | nindent 4 }}
+    {{- include "valkey-leader.clusterLabels" . | nindent 4 }}
+    valkey.sapslaj.cloud/instance-role: primary
+  ports:
+    - name: redis
+      port: {{ .Values.service.readWrite.port }}
+      targetPort: {{ .Values.valkey.port }}
+
+{{- if .Values.redisExporter.enabled }}
+---
+# Metrics service - points to redis_exporter on all pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.metrics.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    valkey-leader.sapslaj.cloud/service-type: metrics
+spec:
+  selector:
+    {{- include "valkey-leader.selectorLabels" . | nindent 4 }}
+    {{- include "valkey-leader.clusterLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.service.metrics.port }}
+      targetPort: {{ .Values.redisExporter.port }}
+{{- end }}

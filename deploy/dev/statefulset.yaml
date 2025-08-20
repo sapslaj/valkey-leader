@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+spec:
+  template:
+    spec:
+      containers:
+        - name: valkey-leader
+          image: localhost/valkey-leader:dev
+          imagePullPolicy: Never # NOTE: needed so that KinD doesn't misbehave

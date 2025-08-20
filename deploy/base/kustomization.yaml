@@ -1,0 +1,12 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./headless_service.yaml
+  - ./read_service.yaml
+  - ./readonly_service.yaml
+  - ./readwrite_service.yaml
+  - ./role.yaml
+  - ./rolebinding.yaml
+  - ./serviceaccount.yaml
+  - ./statefulset.yaml

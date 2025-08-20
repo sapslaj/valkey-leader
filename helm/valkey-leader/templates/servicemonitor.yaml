@@ -1,0 +1,27 @@
+{{- if and .Values.redisExporter.enabled .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}
+  {{- $namespace := default .Release.Namespace .Values.monitoring.serviceMonitor.namespace }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "valkey-leader.selectorLabels" . | nindent 6 }}
+      valkey-leader.sapslaj.cloud/service-type: metrics
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      path: /metrics
+{{- end }}

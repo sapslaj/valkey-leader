@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "valkey-leader.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-leader.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.headless.name }}
+  replicas: {{ .Values.statefulSet.replicas }}
+  selector:
+    matchLabels:
+      {{- include "valkey-leader.selectorLabels" . | nindent 6 }}
+      {{- include "valkey-leader.clusterLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "valkey-leader.selectorLabels" . | nindent 8 }}
+        {{- include "valkey-leader.clusterLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "valkey-leader.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: valkey
+          image: "{{ .Values.valkey.image.repository }}:{{ .Values.valkey.image.tag }}"
+          imagePullPolicy: {{ .Values.valkey.image.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: {{ .Values.valkey.port }}
+              protocol: TCP
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources.valkey }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        - name: valkey-leader
+          image: "{{ .Values.valkeyLeader.image.repository }}:{{ .Values.valkeyLeader.image.tag }}"
+          imagePullPolicy: {{ .Values.valkeyLeader.image.pullPolicy }}
+          env:
+            - name: CLUSTER_NAME
+              value: {{ include "valkey-leader.clusterName" . }}
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SERVICE_NAME
+              value: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.headless.name }}
+            - name: LEADER_LEASE_NAME
+              value: {{ include "valkey-leader.leaseName" . }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources.valkeyLeader }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- if .Values.redisExporter.enabled }}
+        - name: redis-exporter
+          image: "{{ .Values.redisExporter.image.repository }}:{{ .Values.redisExporter.image.tag }}"
+          imagePullPolicy: {{ .Values.redisExporter.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.redisExporter.port }}
+              protocol: TCP
+          env:
+            - name: REDIS_ADDR
+              value: "redis://localhost:{{ .Values.valkey.port }}"
+            {{- range $key, $value := .Values.redisExporter.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources.redisExporter }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

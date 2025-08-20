@@ -1,0 +1,33 @@
+1. Connect to your Valkey cluster:
+
+2. Your Valkey cluster "{{ include "valkey-leader.clusterName" . }}" has been deployed with:
+   - {{ .Values.statefulSet.replicas }} replicas
+   - Leader election lease: {{ include "valkey-leader.leaseName" . }}
+
+3. Available services:
+   - Headless service: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.headless.name }}
+   - Read service: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.read.name }}
+   - Read-only service: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.readOnly.name }}
+   - Read-write service: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.readWrite.name }}
+   {{- if .Values.redisExporter.enabled }}
+   - Metrics service: {{ include "valkey-leader.fullname" . }}-{{ .Values.service.metrics.name }}
+   {{- end }}
+
+4. To check the status of your pods:
+   kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+5. To check which pod is the primary:
+   kubectl get pods -n {{ .Release.Namespace }} -l valkey.sapslaj.cloud/instance-role=primary
+
+6. To check replication status:
+   kubectl exec -n {{ .Release.Namespace }} {{ include "valkey-leader.fullname" . }}-0 -c valkey -- valkey-cli INFO replication
+
+{{- if .Values.redisExporter.enabled }}
+7. To access metrics:
+   kubectl port-forward svc/{{ include "valkey-leader.fullname" . }}-{{ .Values.service.metrics.name }} -n {{ .Release.Namespace }} 9121:{{ .Values.service.metrics.port }}
+   Then visit http://localhost:9121/metrics
+{{- end }}
+
+{{- if and .Values.redisExporter.enabled .Values.monitoring.serviceMonitor.enabled }}
+8. ServiceMonitor has been created for Prometheus monitoring
+{{- end }}

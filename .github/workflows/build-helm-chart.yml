@@ -1,0 +1,106 @@
+name: Build and Push Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'helm/valkey-leader/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'helm/valkey-leader/**'
+
+env:
+  REGISTRY: ghcr.io
+  CHART_NAME: sapslaj/valkey-leader-chart
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint ./helm/valkey-leader
+
+      - name: Template Helm chart
+        run: |
+          helm template test-release ./helm/valkey-leader > /dev/null
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set chart version for main branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          sed -i "s/version: .*/version: 0.1.0-${SHORT_SHA}/" ./helm/valkey-leader/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: ${SHORT_SHA}/" ./helm/valkey-leader/Chart.yaml
+
+      - name: Set chart version for tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/version: .*/version: ${TAG_VERSION}/" ./helm/valkey-leader/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: ${TAG_VERSION}/" ./helm/valkey-leader/Chart.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package ./helm/valkey-leader --destination ./helm-packages
+
+      - name: Push Helm chart to GHCR
+        run: |
+          CHART_VERSION=$(helm show chart ./helm/valkey-leader | grep '^version:' | awk '{print $2}')
+
+          # Push with version tag
+          helm push ./helm-packages/valkey-leader-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${{ env.CHART_NAME }}
+
+          # For main branch, also tag as 'latest'
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Re-package with 'latest' version for the latest tag
+            sed -i "s/version: .*/version: latest/" ./helm/valkey-leader/Chart.yaml
+            helm package ./helm/valkey-leader --destination ./helm-packages
+            helm push ./helm-packages/valkey-leader-latest.tgz oci://${{ env.REGISTRY }}/${{ env.CHART_NAME }}
+          fi
+
+      - name: Generate chart metadata
+        run: |
+          CHART_VERSION=$(helm show chart ./helm/valkey-leader | grep '^version:' | awk '{print $2}' | head -1)
+          echo "Chart version: $CHART_VERSION"
+          echo "Registry: ${{ env.REGISTRY }}/${{ env.CHART_NAME }}"
+          echo "Installation command:"
+          echo "  helm install my-valkey oci://${{ env.REGISTRY }}/${{ env.CHART_NAME }} --version $CHART_VERSION"

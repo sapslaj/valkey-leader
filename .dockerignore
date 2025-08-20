@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# GitHub Actions
+.github
+
+# Documentation
+*.md
+README*
+
+# Helm charts
+helm/
+
+# Kubernetes manifests
+deploy/
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts (keep these out of build context)
+valkey-leader
+valkey-cop
+
+# Test files
+*_test.go
+testdata/
+
+# Local development
+.env
+.env.local

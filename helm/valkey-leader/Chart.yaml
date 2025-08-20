@@ -1,0 +1,17 @@
+apiVersion: v2
+name: valkey-leader
+description: A Kubernetes sidecar for managing Valkey instances in a StatefulSet with automated leader election and replication setup
+type: application
+version: 0.1.0
+appVersion: "dev"
+keywords:
+  - valkey
+  - redis
+  - replication
+  - kubernetes
+  - sidecar
+home: https://github.com/sapslaj/valkey-leader
+sources:
+  - https://github.com/sapslaj/valkey-leader
+maintainers:
+  - name: sapslaj

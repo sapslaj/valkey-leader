@@ -1,0 +1,109 @@
+# Default values for valkey-leader
+# This is a YAML-formatted file.
+
+# Valkey configuration
+valkey:
+  image:
+    repository: valkey/valkey
+    tag: "8"
+    pullPolicy: IfNotPresent
+
+  port: 6379
+
+# Valkey-leader sidecar configuration
+valkeyLeader:
+  image:
+    repository: ghcr.io/sapslaj/valkey-leader
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# Redis exporter sidecar configuration
+redisExporter:
+  enabled: true
+  image:
+    repository: oliver006/redis_exporter
+    tag: "v1.66.0"
+    pullPolicy: IfNotPresent
+  port: 9121
+  env: {}
+  # Additional environment variables for redis_exporter
+  # env:
+  #   REDIS_EXPORTER_LOG_FORMAT: json
+
+# StatefulSet configuration
+statefulSet:
+  replicas: 2
+
+# Service configuration
+service:
+  # Headless service for StatefulSet
+  headless:
+    name: headless
+    port: 6379
+
+  # Read service (points to all pods)
+  read:
+    name: r
+    port: 6379
+
+  # Read-only service (points to replicas)
+  readOnly:
+    name: ro
+    port: 6379
+
+  # Read-write service (points to primary)
+  readWrite:
+    name: rw
+    port: 6379
+
+  # Metrics service (for redis_exporter)
+  metrics:
+    name: metrics
+    port: 9121
+
+# RBAC configuration
+rbac:
+  create: true
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+# Leader election configuration
+leaderElection:
+  leaseName: "" # Defaults to release name if empty
+
+# Cluster configuration
+cluster:
+  name: "" # Defaults to release name if empty
+
+# Resource limits and requests
+resources:
+  valkey: {}
+  valkeyLeader: {}
+  redisExporter: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Pod security context
+podSecurityContext: {}
+
+# Container security context
+securityContext: {}
+
+# Monitoring configuration
+monitoring:
+  serviceMonitor:
+    enabled: false
+    namespace: "" # Defaults to release namespace if empty
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    annotations: {}
