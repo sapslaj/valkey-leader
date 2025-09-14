@@ -59,13 +59,13 @@ jobs:
         run: |
           kubectl get services -l app.kubernetes.io/name=valkey-leader
           echo "Headless service:"
-          kubectl get service valkey-test-headless
+          kubectl get service valkey-test-valkey-leader-headless
           echo "Read service:"
-          kubectl get service valkey-test-r
+          kubectl get service valkey-test-valkey-leader-r
           echo "Read-write service:"
-          kubectl get service valkey-test-rw
+          kubectl get service valkey-test-valkey-leader-rw
           echo "Read-only service:"
-          kubectl get service valkey-test-ro
+          kubectl get service valkey-test-valkey-leader-ro
 
       - name: Test Valkey connectivity and operations
         run: |
