@@ -153,13 +153,13 @@ jobs:
 
       - name: Build and load Docker image
         run: |
-          docker build -t valkey-leader:dev .
+          docker build -t ghcr.io/sapslaj/valkey-leader:dev .
           kind load docker-image ghcr.io/sapslaj/valkey-leader:dev --name valkey-test
 
       - name: Install Helm chart
         run: |
           helm install valkey-test ./helm/valkey-leader \
-            --set valkeyLeader.image.repository=valkey-leader \
+            --set valkeyLeader.image.repository=ghcr.io/sapslaj/valkey-leader \
             --set valkeyLeader.image.tag=dev \
             --set valkeyLeader.image.pullPolicy=Never \
             --wait --timeout=300s
