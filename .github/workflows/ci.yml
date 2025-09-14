@@ -154,7 +154,7 @@ jobs:
       - name: Build and load Docker image
         run: |
           docker build -t valkey-leader:dev .
-          kind load docker-image ghcr.io/sapslaj/valkey-leader:test --name valkey-test
+          kind load docker-image ghcr.io/sapslaj/valkey-leader:dev --name valkey-test
 
       - name: Install Helm chart
         run: |
