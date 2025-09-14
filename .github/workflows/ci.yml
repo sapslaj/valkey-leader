@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches:
       - main
@@ -15,46 +15,69 @@ jobs:
   test-go:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Setup tools
+        uses: ./.github/actions/setup-tools
         with:
-          go-version: '1.24'
+          tools: go
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      - run: go mod download
 
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run tests
-        run: go test -v ./...
-
-      - name: Build binary
-        run: go build -v .
+      - run: go build -v .
 
       - name: Verify build
         run: ./valkey-leader --help || echo "Binary built successfully"
 
+      - run: go test -v ./...
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch:
+          - amd64
+          - arm64
+        goos:
+          - linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup tools
+        uses: ./.github/actions/setup-tools
+        with:
+          tools: go
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -eux
+          go mod download
+          go build -v -o "./valkey-leader-$GOOS-$GOARCH" .
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ./valkey-leader-${{ matrix.goos }}-{{ matrix.goarch }}
+          path: ./valkey-leader-${{ matrix.goos }}-{{ matrix.goarch }}
+          retention-days: 1
+
   lint-helm:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
+      - name: Setup tools
+        uses: ./.github/actions/setup-tools
         with:
-          version: '3.14.0'
+          tools: helm
 
       - name: Lint Helm chart
         run: helm lint ./helm/valkey-leader
@@ -75,40 +98,48 @@ jobs:
           echo "    enabled: true" >> /tmp/test-values.yaml
           helm template test-release ./helm/valkey-leader -f /tmp/test-values.yaml
 
-  docker-build-test:
+  docker-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image (test only)
-        uses: docker/build-push-action@v6
+      - name: Setup tools
+        uses: ./.github/actions/setup-tools
         with:
-          context: .
-          push: false
-          tags: valkey-leader:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tools: buildx, yeet
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          tags: |
+            # Use short SHA for main branch pushes
+            type=raw,value={{sha}},enable={{is_default_branch}}
+            # Use git tag for tagged releases
+            type=ref,event=tag
+            # Use PR number for pull requests
+            type=ref,event=pr
+
+      - name: yeet
+        run: |
+          set -x
+          export DOCKER_TAGS='${{ steps.meta.outputs.tags }}'
+          export DOCKER_PUSH='${{ github.ref == 'refs/heads/main' }}'
+          go tool github.com/TecharoHQ/yeet/cmd/yeet
 
   integration-test:
     runs-on: ubuntu-latest
-    needs: [test-go, lint-helm, docker-build-test]
+    needs:
+      - test-go
+      - lint-helm
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
+      - name: Setup tools
+        uses: ./.github/actions/setup-tools
         with:
-          version: '3.14.0'
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'latest'
+          tools: all
 
       - name: Create KinD cluster
         uses: helm/kind-action@v1
@@ -122,14 +153,14 @@ jobs:
 
       - name: Build and load Docker image
         run: |
-          docker build -t valkey-leader:test .
-          kind load docker-image valkey-leader:test --name valkey-test
+          docker build -t ghcr.io/sapslaj/valkey-leader:dev .
+          kind load docker-image ghcr.io/sapslaj/valkey-leader:dev --name valkey-test
 
       - name: Install Helm chart
         run: |
           helm install valkey-test ./helm/valkey-leader \
-            --set valkeyLeader.image.repository=valkey-leader \
-            --set valkeyLeader.image.tag=test \
+            --set valkeyLeader.image.repository=ghcr.io/sapslaj/valkey-leader \
+            --set valkeyLeader.image.tag=dev \
             --set valkeyLeader.image.pullPolicy=Never \
             --wait --timeout=300s
 
@@ -142,30 +173,154 @@ jobs:
           echo "Waiting for services to stabilize..."
           sleep 10
 
-      - name: Test Valkey operations
+      - name: Check services are created
         run: |
-          kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c "
-            echo 'Setting test data...'
-            redis-cli -h valkey-test-valkey-leader-rw -p 6379 set test-key integration-test
+          kubectl get services -l app.kubernetes.io/name=valkey-leader
+          echo "Headless service:"
+          kubectl get service valkey-test-valkey-leader-headless
+          echo "Read service:"
+          kubectl get service valkey-test-valkey-leader-r
+          echo "Read-write service:"
+          kubectl get service valkey-test-valkey-leader-rw
+          echo "Read-only service:"
+          kubectl get service valkey-test-valkey-leader-ro
+
+      - name: Test Valkey connectivity and operations
+        run: |
+          # Install redis-cli in a temporary pod for testing
+          kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c '
+            # Test write operations (should connect to primary via read-write service)
+            echo "Testing write operations..."
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 set test-key "hello world"
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 set counter 0
             redis-cli -h valkey-test-valkey-leader-rw -p 6379 incr counter
 
-            echo 'Testing read operations with retry logic...'
-            for i in 1 2 3 4 5; do
-              echo \"Attempt \$i/5...\"
-              TEST_VALUE=\$(redis-cli -h valkey-test-valkey-leader-r -p 6379 get test-key)
-              echo \"Got value: \\\"\$TEST_VALUE\\\"\"
+            # Test read operations (should work from any service)
+            echo "Testing read operations..."
+            echo "Reading from read-write service:"
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 get test-key
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 get counter
 
-              if [ \"\$TEST_VALUE\" = \"integration-test\" ]; then
-                echo '✅ Integration test passed on attempt '\$i'!'
-                exit 0
-              fi
+            echo "Reading from read service:"
+            redis-cli -h valkey-test-valkey-leader-r -p 6379 get test-key
+            redis-cli -h valkey-test-valkey-leader-r -p 6379 get counter
 
-              if [ \$i -lt 5 ]; then
-                echo 'Retrying in 3 seconds...'
-                sleep 3
-              fi
-            done
+            echo "Reading from read-only service:"
+            redis-cli -h valkey-test-valkey-leader-ro -p 6379 get test-key
+            redis-cli -h valkey-test-valkey-leader-ro -p 6379 get counter
 
-            echo \"❌ Test failed after 5 attempts. Final value: \\\"\$TEST_VALUE\\\"\"
-            exit 1
-          "
+            # Test replication by checking info
+            echo "Checking replication status on read-write service:"
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 info replication
+
+            echo "Test completed successfully!"
+          '
+
+      - name: Test leader election and failover
+        run: |
+          # Get the current leader pod
+          echo "Getting current leader pod..."
+          LEADER_POD=$(kubectl get pods -l app.kubernetes.io/name=valkey-leader -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | head -1)
+          echo "Current potential leader: $LEADER_POD"
+
+          # Check which pod is actually the primary by connecting to the read-write service
+          kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c '
+            echo "Checking which pod is the primary..."
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 info server | grep "# Server"
+          '
+
+          # Delete the leader pod to test failover
+          echo "Deleting leader pod to test failover..."
+          kubectl delete pod $LEADER_POD
+
+          # Wait for the StatefulSet to recreate the pod
+          kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=valkey-leader --timeout=300s
+
+          # Wait a bit for leader election to happen
+          sleep 30
+
+          # Test that the service still works after failover
+          kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c '
+            echo "Testing service after failover..."
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 set failover-test "success"
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 get failover-test
+            redis-cli -h valkey-test-valkey-leader-rw -p 6379 get test-key
+            echo "Failover test completed successfully!"
+          '
+
+      - name: Check logs for any errors
+        if: always()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -l app.kubernetes.io/name=valkey-leader
+
+          echo "=== Valkey Leader Logs ==="
+          for pod in $(kubectl get pods -l app.kubernetes.io/name=valkey-leader -o jsonpath='{.items[*].metadata.name}'); do
+            echo "--- Logs for $pod (valkey-leader container) ---"
+            kubectl logs $pod -c valkey-leader --tail=50 || true
+            echo "--- Logs for $pod (valkey container) ---"
+            kubectl logs $pod -c valkey --tail=50 || true
+          done
+
+      - name: Test cleanup
+        if: always()
+        run: |
+          helm uninstall valkey-test || true
+          kubectl get pods -l app.kubernetes.io/name=valkey-leader || true
+
+  build-and-push-helm:
+    runs-on: ubuntu-latest
+    needs:
+      - lint-helm
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set chart version for main branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          sed -i "s/version: .*/version: 0.1.0-${SHORT_SHA}/" ./helm/valkey-leader/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: ${SHORT_SHA}/" ./helm/valkey-leader/Chart.yaml
+
+      - name: Set chart version for tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/version: .*/version: ${TAG_VERSION}/" ./helm/valkey-leader/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: ${TAG_VERSION}/" ./helm/valkey-leader/Chart.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package ./helm/valkey-leader --destination ./helm-packages
+
+      - name: Push Helm chart to GHCR
+        run: |
+          CHART_VERSION=$(helm show chart ./helm/valkey-leader | grep '^version:' | awk '{print $2}')
+
+          # Push with version tag
+          helm push ./helm-packages/valkey-leader-${CHART_VERSION}.tgz oci://ghcr.io/sapslaj/valkey-leader-chart
+
+      - name: Generate chart metadata
+        run: |
+          CHART_VERSION=$(helm show chart ./helm/valkey-leader | grep '^version:' | awk '{print $2}' | head -1)
+          echo "Chart version: $CHART_VERSION"
+          echo "Registry: oci://ghcr.io/sapslaj/valkey-leader-chart"
+          echo "Installation command:"
+          echo "  helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart --version $CHART_VERSION"

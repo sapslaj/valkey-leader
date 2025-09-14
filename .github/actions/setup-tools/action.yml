@@ -1,0 +1,44 @@
+name: Setup tools
+
+inputs:
+  tools:
+    description: |
+      Comma separated list of tools to install. The default of "all" installs all tools. Available tools are:
+        buildx
+        go
+        helm
+        kubectl
+        yeet
+    default: all
+
+runs:
+  using: composite
+  steps:
+    - name: Install Docker Buildx
+      if: inputs.tools == 'all' || contains(inputs.tools, 'buildx')
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install Go
+      if: inputs.tools == 'all' || contains(inputs.tools, 'go')
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.25.x"
+        cache-dependency-path: |
+          ./*.sum
+
+    - name: Install Helm
+      if: inputs.tools == 'all' || contains(inputs.tools, 'helm')
+      uses: azure/setup-helm@v4
+      with:
+        version: "3.14.0"
+
+    - name: Install kubectl
+      if: inputs.tools == 'all' || contains(inputs.tools, 'kubectl')
+      uses: azure/setup-kubectl@v4
+      with:
+        version: "latest"
+
+    - name: Install yeet
+      if: inputs.tools == 'all' || contains(inputs.tools, 'yeet')
+      shell: bash
+      run: go install github.com/TecharoHQ/yeet/cmd/yeet@latest
