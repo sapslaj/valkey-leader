@@ -23,14 +23,14 @@ The easiest way is using the pre-packaged Helm chart that includes:
 
 ```bash
 # Install latest version
-helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart
+helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart/valkey-leader
 
 # Install in a specific namespace
-helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart \
+helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart/valkey-leader \
   --namespace valkey --create-namespace
 
 # Install specific version
-helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart --version 1.0.0
+helm install my-valkey oci://ghcr.io/sapslaj/valkey-leader-chart/valkey-leader --version 0.1.0
 ```
 
 #### Local Development
