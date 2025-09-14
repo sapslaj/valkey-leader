@@ -137,6 +137,11 @@ jobs:
         run: |
           kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=valkey-leader --timeout=300s
 
+      - name: Wait for services to stabilize
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 10
+
       - name: Test Valkey operations
         run: |
           kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c '

@@ -50,6 +50,11 @@ jobs:
           kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=valkey-leader --timeout=300s
           kubectl get pods -l app.kubernetes.io/name=valkey-leader
 
+      - name: Wait for services to stabilize
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 10
+
       - name: Check services are created
         run: |
           kubectl get services -l app.kubernetes.io/name=valkey-leader
