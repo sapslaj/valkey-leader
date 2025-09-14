@@ -25,8 +25,7 @@ yeet.run(
   "build",
   "--platform",
   dockerPlatforms.join(","),
-  "-t",
-  dockerBuildTags.join(","),
+  ...(dockerBuildTags.flatMap((tag) => ["--tag", tag])),
   ...(dockerPush === "true" ? ["--push"] : []),
   ".",
 );
