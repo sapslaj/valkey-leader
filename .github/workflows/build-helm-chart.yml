@@ -13,6 +13,7 @@ on:
       - main
     paths:
       - 'helm/valkey-leader/**'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
