@@ -3,15 +3,18 @@ package crd
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
+	"github.com/yokecd/yoke/pkg/openapi"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	APIGroup   = "valkey-leader.sapslaj.cloud"
-	APIVersion = "valkey-leader.sapslaj.cloud/v1"
+	APIVersion = "valkey-leader.sapslaj.cloud/v1alpha1"
 	KindValkey = "Valkey"
 )
 
@@ -99,4 +102,24 @@ func (backend *Valkey) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unexpected kind: expected %s but got %s", KindValkey, backend.Kind)
 	}
 	return nil
+}
+
+var CustomResourceDefinitionSpec = apiextv1.CustomResourceDefinitionSpec{
+	Group: APIGroup,
+	Names: apiextv1.CustomResourceDefinitionNames{
+		Plural:   "valkeys",
+		Singular: "valkey",
+		Kind:     KindValkey,
+	},
+	Scope: apiextv1.NamespaceScoped,
+	Versions: []apiextv1.CustomResourceDefinitionVersion{
+		{
+			Name:    "v1alpha1",
+			Served:  true,
+			Storage: true,
+			Schema: &apiextv1.CustomResourceValidation{
+				OpenAPIV3Schema: openapi.SchemaFrom(reflect.TypeFor[Valkey]()),
+			},
+		},
+	},
 }
