@@ -100,6 +100,12 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
