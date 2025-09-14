@@ -11,6 +11,9 @@ const dockerPush = yeet.getenv("DOCKER_PUSH");
 const dockerTags = yeet.getenv("DOCKER_TAGS").split(",");
 
 for (const dockerTag of dockerTags) {
+  if (dockerTag === "") {
+    continue;
+  }
   $`docker tag ${image}:latest ${image}:${dockerTag}`;
 }
 
@@ -19,6 +22,9 @@ if (dockerPush === "true" || dockerPush === "latest") {
 }
 if (dockerPush === "true") {
   for (const dockerTag of dockerTags) {
+    if (dockerTag === "") {
+      continue;
+    }
     $`docker push ${image}:${dockerTag}`;
   }
 }

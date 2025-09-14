@@ -1,3 +1,7 @@
+.PHONY: yeet
+yeet:
+	go tool github.com/TecharoHQ/yeet/cmd/yeet
+
 .PHONY: build-docker
 build-docker:
 	docker build -t localhost/valkey-leader:dev .
