@@ -5,26 +5,28 @@ const dockerPlatforms = [
   "linux/arm64",
 ];
 
-$`docker buildx build --platform=${dockerPlatforms.join(",")} -t ${image}:latest .`;
-
-const dockerPush = yeet.getenv("DOCKER_PUSH");
 const dockerTags = yeet.getenv("DOCKER_TAGS").split(",");
 
+const dockerBuildTags = [
+  `${image}:latest`,
+];
 for (const dockerTag of dockerTags) {
-  if (dockerTag === "") {
+  if (dockerTag === "" || dockerTag === "latest") {
     continue;
   }
-  $`docker tag ${image}:latest ${image}:${dockerTag}`;
+  dockerBuildTags.push(`${image}:${dockerTag}`);
 }
 
-if (dockerPush === "true" || dockerPush === "latest") {
-  $`docker push ${image}:latest`;
-}
-if (dockerPush === "true") {
-  for (const dockerTag of dockerTags) {
-    if (dockerTag === "") {
-      continue;
-    }
-    $`docker push ${image}:${dockerTag}`;
-  }
-}
+const dockerPush = yeet.getenv("DOCKER_PUSH");
+
+yeet.run(
+  "docker",
+  "buildx",
+  "build",
+  "--platform",
+  dockerPlatforms.join(","),
+  "-t",
+  dockerBuildTags.join(","),
+  ...(dockerPush === "true" ? ["--push"] : []),
+  ".",
+);
