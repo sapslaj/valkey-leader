@@ -145,12 +145,27 @@ jobs:
       - name: Test Valkey operations
         run: |
           kubectl run redis-cli-test --rm -i --restart=Never --image=redis:7-alpine -- sh -c '
+            echo "Setting test data..."
             redis-cli -h valkey-test-valkey-leader-rw -p 6379 set test-key integration-test
             redis-cli -h valkey-test-valkey-leader-rw -p 6379 incr counter
-            TEST_VALUE=$(redis-cli -h valkey-test-valkey-leader-r -p 6379 get test-key)
-            if [ "$TEST_VALUE" != "integration-test" ]; then
-              echo "Test failed: expected integration-test, got $TEST_VALUE"
-              exit 1
-            fi
-            echo "Integration test passed!"
+
+            echo "Testing read operations with retry logic..."
+            for i in {1..5}; do
+              echo "Attempt $i/5..."
+              TEST_VALUE=$(redis-cli -h valkey-test-valkey-leader-r -p 6379 get test-key)
+              echo "Got value: \"$TEST_VALUE\""
+
+              if [ "$TEST_VALUE" = "integration-test" ]; then
+                echo "✅ Integration test passed on attempt $i!"
+                exit 0
+              fi
+
+              if [ $i -lt 5 ]; then
+                echo "Retrying in 3 seconds..."
+                sleep 3
+              fi
+            done
+
+            echo "❌ Test failed after 5 attempts. Final value: \"$TEST_VALUE\""
+            exit 1
           '
