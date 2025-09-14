@@ -90,14 +90,6 @@ jobs:
           # Push with version tag
           helm push ./helm-packages/valkey-leader-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${{ env.CHART_NAME }}
 
-          # For main branch, also tag as 'latest'
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Re-package with 'latest' version for the latest tag
-            sed -i "s/version: .*/version: latest/" ./helm/valkey-leader/Chart.yaml
-            helm package ./helm/valkey-leader --destination ./helm-packages
-            helm push ./helm-packages/valkey-leader-latest.tgz oci://${{ env.REGISTRY }}/${{ env.CHART_NAME }}
-          fi
-
       - name: Generate chart metadata
         run: |
           CHART_VERSION=$(helm show chart ./helm/valkey-leader | grep '^version:' | awk '{print $2}' | head -1)
