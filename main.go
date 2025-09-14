@@ -40,6 +40,13 @@ func main() {
 	podName := env.MustGet[string]("POD_NAME")
 	serviceName := env.MustGet[string]("SERVICE_NAME")
 	leaderLeaseName := env.MustGetDefault("LEADER_LEASE_NAME", clusterName)
+	reconcileInterval := env.MustGetDefault("RECONCILE_INTERVAL", 15*time.Second)
+	leaseDuration := env.MustGetDefault("LEASE_DURATION", 60*time.Second)
+	renewDuration := env.MustGetDefault("RENEW_DURATION", 15*time.Second)
+	retryPeriod := env.MustGetDefault("RETRY_PERIOD", 5*time.Second)
+	valkeyAddress := env.MustGetDefault("VALKEY_ADDRESS", "localhost:6379")
+	valkeyUsername := env.MustGetDefault("VALKEY_USERNAME", "")
+	valkeyPassword := env.MustGetDefault("VALKEY_PASSWORD", "")
 
 	mainLogger = mainLogger.With(
 		slog.String("cluster_name", clusterName),
@@ -80,16 +87,24 @@ func main() {
 		cancel()
 	}()
 
+	makeValkeyClient := func() (valkey.Client, error) {
+		return valkey.NewClient(valkey.ClientOption{
+			InitAddress: []string{valkeyAddress},
+			Username:    valkeyUsername,
+			Password:    valkeyPassword,
+		})
+
+	}
+
 	go func() {
 		for {
 			logger := mainLogger.With()
 			select {
-			case <-time.After(15 * time.Second):
+			case <-time.After(reconcileInterval):
 				if leading.Load() {
 					continue
 				}
 
-				// Find the primary pod by looking for instance-role=primary label
 				pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: "valkey.sapslaj.cloud/instance-role=primary",
 				})
@@ -113,7 +128,7 @@ func main() {
 				logger.Info("found primary pod", slog.String("primary_pod", primaryPod.Name), slog.String("primary_ip", primaryIP))
 
 				// Connect to local Valkey and configure replication
-				valkeyClient, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{"localhost:6379"}})
+				valkeyClient, err := makeValkeyClient()
 				if err != nil {
 					logger.Error("failed to create Valkey client", slog.Any("error", err))
 					continue
@@ -169,52 +184,50 @@ func main() {
 	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
 		Lock:            lock,
 		ReleaseOnCancel: true,
-		LeaseDuration:   60 * time.Second,
-		RenewDeadline:   15 * time.Second,
-		RetryPeriod:     5 * time.Second,
+		LeaseDuration:   leaseDuration,
+		RenewDeadline:   renewDuration,
+		RetryPeriod:     retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				leading.Store(true)
 				for leading.Load() {
 					logger := mainLogger.With()
 					select {
-					case <-time.After(15 * time.Second):
+					case <-time.After(reconcileInterval):
 
-					// Connect to local Valkey and promote to primary
-					valkeyClient, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{"localhost:6379"}})
-					if err != nil {
-						logger.Error("failed to create Valkey client", slog.Any("error", err))
-						continue
-					}
+						valkeyClient, err := makeValkeyClient()
+						if err != nil {
+							logger.Error("failed to create Valkey client", slog.Any("error", err))
+							continue
+						}
 
-					err = valkeyClient.Do(ctx, valkeyClient.B().Replicaof().No().One().Build()).Error()
-					valkeyClient.Close()
-					if err != nil {
-						logger.Error("failed to promote to primary", slog.Any("error", err))
-						continue
-					}
+						err = valkeyClient.Do(ctx, valkeyClient.B().Replicaof().No().One().Build()).Error()
+						valkeyClient.Close()
+						if err != nil {
+							logger.Error("failed to promote to primary", slog.Any("error", err))
+							continue
+						}
 
-					logger.Info("promoted to primary")
+						logger.Info("promoted to primary")
 
-					// Add primary label to current pod
-					currentPod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-					if err != nil {
-						logger.Error("failed to get current pod", slog.Any("error", err))
-						continue
-					}
+						currentPod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+						if err != nil {
+							logger.Error("failed to get current pod", slog.Any("error", err))
+							continue
+						}
 
-					if currentPod.Labels == nil {
-						currentPod.Labels = make(map[string]string)
-					}
-					currentPod.Labels["valkey.sapslaj.cloud/instance-role"] = "primary"
+						if currentPod.Labels == nil {
+							currentPod.Labels = make(map[string]string)
+						}
+						currentPod.Labels["valkey.sapslaj.cloud/instance-role"] = "primary"
 
-					_, err = client.CoreV1().Pods(namespace).Update(ctx, currentPod, metav1.UpdateOptions{})
-					if err != nil {
-						logger.Error("failed to update pod labels", slog.Any("error", err))
-						continue
-					}
+						_, err = client.CoreV1().Pods(namespace).Update(ctx, currentPod, metav1.UpdateOptions{})
+						if err != nil {
+							logger.Error("failed to update pod labels", slog.Any("error", err))
+							continue
+						}
 
-					logger.Info("updated pod with primary label")
+						logger.Info("updated pod with primary label")
 
 					case <-ctx.Done():
 						logger.InfoContext(ctx, "context canceled")
