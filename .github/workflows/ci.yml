@@ -66,7 +66,7 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.goos }}-{{ matrix.goarch }}
+          name: build-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ./bin/*
           retention-days: 1
 
