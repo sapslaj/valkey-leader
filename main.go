@@ -40,10 +40,10 @@ func main() {
 	podName := env.MustGet[string]("POD_NAME")
 	serviceName := env.MustGet[string]("SERVICE_NAME")
 	leaderLeaseName := env.MustGetDefault("LEADER_LEASE_NAME", clusterName)
-	reconcileInterval := env.MustGetDefault("RECONCILE_INTERVAL", 15*time.Second)
-	leaseDuration := env.MustGetDefault("LEASE_DURATION", 60*time.Second)
-	renewDuration := env.MustGetDefault("RENEW_DURATION", 15*time.Second)
-	retryPeriod := env.MustGetDefault("RETRY_PERIOD", 5*time.Second)
+	reconcileInterval := env.MustGetDefault("RECONCILE_INTERVAL", 5*time.Second)
+	leaseDuration := env.MustGetDefault("LEASE_DURATION", 5*time.Second)
+	renewDeadline := env.MustGetDefault("RENEW_DEADLINE", 4*time.Second)
+	retryPeriod := env.MustGetDefault("RETRY_PERIOD", 2*time.Second)
 	valkeyAddress := env.MustGetDefault("VALKEY_ADDRESS", "localhost:6379")
 	valkeyUsername := env.MustGetDefault("VALKEY_USERNAME", "")
 	valkeyPassword := env.MustGetDefault("VALKEY_PASSWORD", "")
@@ -114,14 +114,14 @@ func main() {
 				}
 
 				if len(pods.Items) == 0 {
-					logger.Warn("no primary pod found, retrying in 15 seconds")
+					logger.Warn("no primary pod found, retrying")
 					continue
 				}
 
 				primaryPod := pods.Items[0]
 				primaryIP := primaryPod.Status.PodIP
 				if primaryIP == "" {
-					logger.Warn("primary pod has no IP address, retrying in 15 seconds")
+					logger.Warn("primary pod has no IP address, retrying")
 					continue
 				}
 
@@ -185,7 +185,7 @@ func main() {
 		Lock:            lock,
 		ReleaseOnCancel: true,
 		LeaseDuration:   leaseDuration,
-		RenewDeadline:   renewDuration,
+		RenewDeadline:   renewDeadline,
 		RetryPeriod:     retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
