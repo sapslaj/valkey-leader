@@ -1,0 +1,6 @@
+apiVersion: valkey-leader.sapslaj.cloud/v1alpha1
+kind: Valkey
+metadata:
+  name: valkey-test
+spec:
+  replicas: 2

@@ -37,3 +37,4 @@ testdata/
 # Local development
 .env
 .env.local
+bin/
