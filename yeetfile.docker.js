@@ -17,6 +17,7 @@ for (const dockerTag of dockerTags) {
   dockerBuildTags.push(`${image}:${dockerTag}`);
 }
 
+const dockerLoad = yeet.getenv("DOCKER_LOAD");
 const dockerPush = yeet.getenv("DOCKER_PUSH");
 
 yeet.run(
@@ -27,5 +28,6 @@ yeet.run(
   dockerPlatforms.join(","),
   ...(dockerBuildTags.flatMap((tag) => ["--tag", tag])),
   ...(dockerPush === "true" ? ["--push"] : []),
+  ...(dockerLoad === "true" ? ["--load"] : []),
   ".",
 );
