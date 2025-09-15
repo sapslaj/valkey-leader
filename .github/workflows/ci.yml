@@ -166,7 +166,9 @@ jobs:
           kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
       - name: Build and load Docker image
-        run: DOCKER_LOAD=true just kind-load-image
+        run: |
+          docker build -t ghcr.io/sapslaj/valkey-leader:dev .
+          kind load docker-image -n valkey-test ghcr.io/sapslaj/valkey-leader:dev
 
       - name: Install Helm chart
         run: just helm-test-install

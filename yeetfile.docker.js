@@ -18,7 +18,6 @@ for (const dockerTag of dockerTags) {
 }
 
 const dockerLoad = yeet.getenv("DOCKER_LOAD");
-const dockerPush = yeet.getenv("DOCKER_PUSH");
 
 yeet.run(
   "docker",
@@ -28,6 +27,5 @@ yeet.run(
   dockerPlatforms.join(","),
   ...(dockerBuildTags.flatMap((tag) => ["--tag", tag])),
   ...(dockerPush === "true" ? ["--push"] : []),
-  ...(dockerLoad === "true" ? ["--load"] : []),
   ".",
 );

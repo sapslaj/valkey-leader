@@ -22,7 +22,7 @@ kind-load-image:
   kind load docker-image -n '{{ cluster_name }}' ghcr.io/sapslaj/valkey-leader:dev
   -kubectl get statefulset '{{ cluster_name }}' && kubectl rollout restart 'statefulset/{{ cluster_name }}'
 
-helm-test-install: kind-load-image
+helm-test-install:
   helm upgrade --install '{{ cluster_name }}' ./helm/valkey-leader \
     --set valkeyLeader.image.tag=dev \
     --set valkeyLeader.image.pullPolicy=Never \
