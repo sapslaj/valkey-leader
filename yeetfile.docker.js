@@ -17,7 +17,7 @@ for (const dockerTag of dockerTags) {
   dockerBuildTags.push(`${image}:${dockerTag}`);
 }
 
-const dockerLoad = yeet.getenv("DOCKER_LOAD");
+const dockerPush = yeet.getenv("DOCKER_PUSH");
 
 yeet.run(
   "docker",
