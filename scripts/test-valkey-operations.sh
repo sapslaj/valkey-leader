@@ -118,7 +118,8 @@ test_services() {
         echo "✅ Service ${full_service_name} is headless (skipping ping test)"
       else
         # Test basic connectivity for regular services
-        local ping_result=$(with_backoff run_redis_cli "${service}" "ping" 2>/dev/null | head -1)
+        local ping_result
+        ping_result="$(with_backoff run_redis_cli "${service}" "ping")"
         if echo "$ping_result" | grep -q "PONG"; then
           echo "✅ Service ${full_service_name} is accessible"
         else
