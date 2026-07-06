@@ -47,7 +47,7 @@ require (
 	github.com/davidmdm/x/xerr v0.0.4 // indirect
 	github.com/davidmdm/x/xruntime v0.0.5 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
-	github.com/docker/cli v28.2.2+incompatible // indirect
+	github.com/docker/cli v29.2.0+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/dop251/goja v0.0.0-20250309171923-bcd7cc6bf64c // indirect
