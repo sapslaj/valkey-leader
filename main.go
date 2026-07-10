@@ -15,11 +15,12 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/sapslaj/valkey-leader/pkg/env"
 )
 
-func main() {
+func run() int {
 	var leading atomic.Bool
 	leading.Store(false)
 
@@ -30,7 +31,7 @@ func main() {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		slog.Error("error building Kubernetes config", slog.Any("error", err))
-		os.Exit(1)
+		return 1
 	}
 	client := clientset.NewForConfigOrDie(config)
 
@@ -61,21 +62,29 @@ func main() {
 	defer cancel()
 
 	// Add cluster label to current pod
-	pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		mainLogger.Error("failed to get current pod", slog.Any("error", err))
-		os.Exit(1)
-	}
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			mainLogger.Warn("error getting current pod", slog.Any("error", err))
+			return err
+		}
 
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels["valkey.sapslaj.cloud/cluster"] = clusterName
+		if pod.Labels == nil {
+			pod.Labels = make(map[string]string)
+		}
+		pod.Labels["valkey.sapslaj.cloud/cluster"] = clusterName
 
-	_, err = client.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
+		_, err = client.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
+		if err != nil {
+			mainLogger.Warn("error updating pod labels", slog.Any("error", err))
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
-		mainLogger.Error("failed to update pod labels", slog.Any("error", err))
-		os.Exit(1)
+		mainLogger.Error("failed to set cluster label, cannot continue", slog.Any("error", err))
+		return 1
 	}
 
 	ch := make(chan os.Signal, 1)
@@ -181,7 +190,7 @@ func main() {
 		},
 	}
 
-	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+	leConfig := leaderelection.LeaderElectionConfig{
 		Lock:            lock,
 		ReleaseOnCancel: true,
 		LeaseDuration:   leaseDuration,
@@ -243,6 +252,17 @@ func main() {
 				mainLogger.Info("new leader elected", slog.String("identity", identity), slog.Bool("self", identity == podIP))
 			},
 		},
-	})
+	}
 
+	for ctx.Err() == nil {
+		leaderelection.RunOrDie(ctx, leConfig)
+	}
+
+	mainLogger.Info("leader election stopped, exiting", slog.Any("reason", ctx.Err()))
+
+	return 0
+}
+
+func main() {
+	os.Exit(run())
 }
